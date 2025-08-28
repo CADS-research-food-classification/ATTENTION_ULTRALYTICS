@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 39
+names: ['AAPAM', 'BANANA', 'BANANA CHIPS', 'BIRIYANI', 'BONDA', 'CHAPATHI', 'CHICKEN CURRY', 'CHICKEN FRY', 'CURD', 'CURD RICE', 'CURRY', 'DAL', 'DOSA', 'EGG', 'FISH CURRY', 'FISH FRY', 'GREEN CHUTNEY', 'IDIYAPPAM', 'IDLI', 'KURMA', 'PAPADAM', 'PAROTTA', 'PICKLE', 'PODI', 'PONGAL', 'POORI', 'PORRIDGE', 'PUTTU', 'RASAM', 'RED CHUTNEY', 'RICE', 'SAMBAR', 'SAMBAR RICE', 'SAUCE', 'SUNDAL', 'SWEET', 'VADA', 'VEGGIES', 'WHITE CHUTNEY']
+
+roboflow:
+  workspace: surya-auqqb
+  project: my-first-project-skkoi
+  version: 7
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/surya-auqqb/my-first-project-skkoi/dataset/7
