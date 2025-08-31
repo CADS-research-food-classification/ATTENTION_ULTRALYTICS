@@ -12,6 +12,7 @@ import torch.nn as nn
 
 from ultralytics.nn.autobackend import check_class_names
 from ultralytics.nn.modules.attention import CBAM
+from ultralytics.nn.modules.attention import SE
 
 from ultralytics.nn.modules import (
     AIFI,
