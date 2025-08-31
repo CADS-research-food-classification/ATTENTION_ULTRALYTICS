@@ -1,61 +1,72 @@
+# Ultralytics - Attention blocks
+# Save as: ultralytics/nn/modules/attention.py
+
+from __future__ import annotations
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-# -------------------
-# CBAM: Convolutional Block Attention Module
-# -------------------
-class ChannelAttention(nn.Module):
-    def __init__(self, in_planes=None, ratio=16):
-        super(ChannelAttention, self).__init__()
-        self.ratio = ratio
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-        # Lazy initialization for channel-dependent layers
-        self.fc1 = None
-        self.relu1 = nn.ReLU()
-        self.fc2 = None
-        self.sigmoid = nn.Sigmoid()
-
-    def _maybe_build(self, c, device, dtype):
-        if self.fc1 is None or self.fc1.in_channels != c:
-            reduced = max(c // self.ratio, 1)
-            self.fc1 = nn.Conv2d(c, reduced, 1, bias=False).to(device=device, dtype=dtype)
-            self.fc2 = nn.Conv2d(reduced, c, 1, bias=False).to(device=device, dtype=dtype)
-
-    def forward(self, x):
-        c = x.shape[1]
-        self._maybe_build(c, x.device, x.dtype)
-        avg_out = self.fc2(self.relu1(self.fc1(self.avg_pool(x))))
-        max_out = self.fc2(self.relu1(self.fc1(self.max_pool(x))))
-        out = avg_out + max_out
-        return self.sigmoid(out)
+__all__ = ["SE", "CBAM"]
 
 
-class SpatialAttention(nn.Module):
-    def __init__(self, kernel_size=7):
-        super(SpatialAttention, self).__init__()
-        assert kernel_size in (3, 7), "kernel size must be 3 or 7"
-        padding = 3 if kernel_size == 7 else 1
+# ---------------- Squeeze-and-Excitation ----------------
+class SE(nn.Module):
+    """
+    Squeeze-and-Excitation block (Hu et al., 2018).
+    Args:
+        c (int): Number of input channels.
+        r (int): Reduction ratio. Default = 16.
+    """
+    def __init__(self, c: int, r: int = 16):
+        super().__init__()
+        assert c > 0, "SE: channels must be > 0"
+        mid = max(c // r, 1)
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Conv2d(c, mid, 1, bias=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(mid, c, 1, bias=True),
+            nn.Sigmoid(),
+        )
 
-        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
-        self.sigmoid = nn.Sigmoid()
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        w = self.fc(self.avg(x))
+        return x * w
 
-    def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
-        x = self.conv1(x)
-        return self.sigmoid(x)
 
+# ---------------- CBAM (optional for compatibility) ----------------
+class ChannelGate(nn.Module):
+    def __init__(self, c: int, r: int = 16):
+        super().__init__()
+        mid = max(c // r, 1)
+        self.mlp = nn.Sequential(
+            nn.Conv2d(c, mid, 1, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(mid, c, 1, bias=False),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        avg = F.adaptive_avg_pool2d(x, 1)
+        mx = F.adaptive_max_pool2d(x, 1)
+        w = torch.sigmoid(self.mlp(avg) + self.mlp(mx))
+        return x * w
+
+class SpatialGate(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(2, 1, kernel_size=7, padding=3, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        avg = torch.mean(x, dim=1, keepdim=True)
+        mx, _ = torch.max(x, dim=1, keepdim=True)
+        s = torch.sigmoid(self.conv(torch.cat([avg, mx], dim=1)))
+        return x * s
 
 class CBAM(nn.Module):
-    def __init__(self, in_planes=None, ratio=16, kernel_size=7):
-        super(CBAM, self).__init__()
-        # Make attention channel-dynamic to match scaled widths
-        self.ca = ChannelAttention(in_planes=None, ratio=ratio)
-        self.sa = SpatialAttention(kernel_size)
+    def __init__(self, c: int, r: int = 16):
+        super().__init__()
+        self.channel = ChannelGate(c, r=r)
+        self.spatial = SpatialGate()
 
-    def forward(self, x):
-        out = x * self.ca(x)
-        out = out * self.sa(out)
-        return out
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.spatial(self.channel(x))

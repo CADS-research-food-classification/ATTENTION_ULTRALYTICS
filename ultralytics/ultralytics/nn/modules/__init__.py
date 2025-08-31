@@ -102,6 +102,10 @@ from .transformer import (
     TransformerLayer,
 )
 
+# 🔥 NEW: import SE + CBAM from attention.py
+from .attention import SE, CBAM  # noqa: F401
+
+
 __all__ = (
     "Conv",
     "Conv2",
@@ -115,6 +119,7 @@ __all__ = (
     "ChannelAttention",
     "SpatialAttention",
     "CBAM",
+    "SE",  # 👈 Added SE here
     "Concat",
     "TransformerLayer",
     "TransformerBlock",
